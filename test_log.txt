@@ -1,0 +1,20 @@
+Mesure 1:
+  - Temps écoulé: 3205.0 ms
+  - Total beats: 4.0
+  - Événements: 6
+
+Mesure 2:
+  - Temps écoulé: 4199.0 ms
+  - Total beats: 5.0
+  - Événements: 6
+
+Mesure 3:
+  - Temps écoulé: 3688.0 ms
+  - Total beats: 4.0
+  - Événements: 9
+
+Mesure 4:
+  - Temps écoulé: 3688.0 ms
+  - Total beats: 4.0
+  - Événements: 9
+

@@ -5,59 +5,75 @@
 #include <lomse_interactor.h>
 #include <lomse_document.h>
 #include <qcoreapplication.h>
-
 #include <iostream>
 #include <QPainter>
 #include <QDebug>
+#include <qlabel.h>
+#include <qfile.h>
+#include <qdir.h>
+#include <qfontdatabase.h>
+#include <qinputdialog.h>
+#include <QKeyEvent>
+#include <qpointer.h>
 
 using namespace lomse;
 
 LomseWidget::LomseWidget(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumSize(800, 600); // Force une taille initiale suffisante
+    setMinimumSize(800, 600);
+    setFocusPolicy(Qt::StrongFocus);
+    setFocus();
+    
     initializeLomse();
     loadScore();
     renderScore();
-
-
-    midiHandler = new RtMidiHandler(this, m_interactor);  // Assurez-vous que RtMidiHandler est une classe qui gere MIDI
-    midiHandler->startMidiCapture();  // Demarrer la capture MIDI
+    
+    startCountdownThenCapture();
 }
 
 LomseWidget::~LomseWidget() {
-    delete midiHandler;  // Liberer RtMidiHandler
+    delete midiHandler;
 }
 
 void LomseWidget::initializeLomse()
 {
-    m_lomse.init_library(k_pix_format_rgba32, 96, false, std::cerr);
-    m_lomse.set_default_fonts_path("C:/lomse/fonts");
+    m_lomse.init_library(k_pix_format_rgba32, 96, true, std::cerr);
+
+    LibraryScope* pScope = m_lomse.get_library_scope();
+    pScope->set_music_font("Bravura.otf", "Bravura", "C:/lomse/fonts");
+
+    // Decommenter pour avoir le input du tempo par l'utilisateur
+    bool ok = false;
+    int tempo = QInputDialog::getInt(this, "Choisir le tempo", "Noire = ", 100, 30, 240, 1, &ok);
+    if (ok)
+        m_userTempo = tempo;
+
+    // Decompte
+    m_countdownLabel = new QLabel(this);
+    m_countdownLabel->setAlignment(Qt::AlignCenter);
+    m_countdownLabel->setStyleSheet("font-size: 48px; color: red;");
+    m_countdownLabel->setGeometry(rect());  // Prend toute la taille du widget
+    m_countdownLabel->hide();               // Masqué au départ
+
+
+    m_userTempo = 60;
 }
 
 void LomseWidget::loadScore()
 {
-    qDebug() << "Load";
-    std::string ldp =
+    std::ostringstream oss;
+    oss <<
         "(score (vers 2.0)\n"
         "  (instrument (name \"Piano\") (staves 1)\n"
         "    (musicData\n"
         "      (clef G)\n"
-        "      (key C)\n"
         "      (time 4 4)\n"
-        "      (n c4 q)\n"
-        "      (n e4 q)\n"
-        "      (n g4 e)\n"
-        "      (n f4 e)\n"
-        "      (barline simple)\n"
-        "      (n d4 q)\n"
-        "      (chord (n c4 e) (n e4 e))\n"
-        "      (n g4 q)\n"
+        "      (metronome q " << m_userTempo << ")\n"
         "    )\n"
         "  )\n"
         ")";
-
-    //qDebug() << "Score LDP: " << QString::fromStdString(ldp);
+    std::string ldp = oss.str();
 
     #define k_view_simple 0
 
@@ -73,8 +89,6 @@ void LomseWidget::loadScore()
 
 void LomseWidget::renderScore()
 {
-    qDebug() << "Render";
-
     if (!m_interactor) {
         qDebug() << "Erreur: interactor non disponible";
         return;
@@ -96,22 +110,19 @@ void LomseWidget::renderScore()
     m_interactor->set_rendering_buffer(&m_renderingBuffer);
     m_interactor->redraw_bitmap();
 
-    // Sauvegarde pour debug
-    //m_scoreImage.save("output.png");
-    //qDebug() << "Image sauvegardee dans output.png";
-
     update();
 }
 
 void LomseWidget::paintEvent(QPaintEvent*)
 {
-    qDebug() << "Peinture de l'evenement";
     QPainter painter(this);
     painter.drawImage(0, 0, m_scoreImage);
 }
 
 void LomseWidget::resizeEvent(QResizeEvent*)
 {
+    if (m_countdownLabel)
+        m_countdownLabel->setGeometry(rect());
     renderScore();
 }
 
@@ -124,4 +135,50 @@ void LomseWidget::refreshScore()
 
     m_interactor->redraw_bitmap(); 
     update();
+}
+
+void LomseWidget::startCountdownThenCapture()
+{
+    QStringList messages = { "3", "2", "1", "Go!" };
+    int delay = 1000;
+
+    QPointer<LomseWidget> safeThis(this);
+    m_countdownLabel->show();
+
+    for (int i = 0; i < messages.size(); ++i) {
+        QTimer::singleShot(i * delay, this, [safeThis, msg = messages[i]]() {
+            if (!safeThis) return;
+            safeThis->m_countdownLabel->setText(msg);
+            });
+    }
+
+    QTimer::singleShot(messages.size() * delay, this, [safeThis]() {
+        if (!safeThis) return;
+        safeThis->m_countdownLabel->hide();
+
+        safeThis->midiHandler = new RtMidiHandler(safeThis, safeThis->m_interactor);
+        safeThis->midiHandler->startMidiCapture();
+        });
+}
+
+
+int LomseWidget::getTempo() {
+    return m_userTempo;
+}
+
+void LomseWidget::saveScoreAsPng(const QString& filename)
+{
+    m_scoreImage.save(filename);
+    qDebug() << "Partition sauvegardee dans : " << filename;
+}
+
+void LomseWidget::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_E) {
+        qDebug() << "Sortie de l'application...";
+
+        if (midiHandler) {
+            midiHandler->finalizeAndExit();  // méthode à définir dans RtMidiHandler
+        }
+    }
 }

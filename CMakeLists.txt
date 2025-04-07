@@ -44,6 +44,10 @@ file(GLOB SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/NoteCommand.cpp
 )
 
+# Copie le dossier fonts/ vers le build pour que Lomse le trouve
+file(COPY ${CMAKE_SOURCE_DIR}/fonts DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+
 # Executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 

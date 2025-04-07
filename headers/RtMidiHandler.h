@@ -19,14 +19,29 @@ public:
 
     void startMidiCapture();
     void stopMidiCapture();
-    void addNoteToScore(unsigned char note);
+    void addNoteToScore(std::string type, std::string note, std::string duration);
+    void padTemps();
+    void padMesure(bool fin);
+
+    void finalizeAndExit();
 
 private:
-    static void midiCallback(double deltatime, std::vector<unsigned char>* message, void* userData);
-    void processMidiMessage(const std::vector<unsigned char>& message);
+
+    std::unordered_map<unsigned char, double> m_activeNotes;
+    std::shared_ptr<lomse::Interactor> m_interactor;
+
+    qint64 tempsDepart = 0;
+    qint64 tempsParTemps = 1000;
+    double tempsCourant = 0.0;
+    int nbTempsDansMesure = 4;
+    double contenuMesure = 0.0;
 
     RtMidiIn* midiIn;
     bool isCapturing;
-    std::shared_ptr<lomse::Interactor> m_interactor;
+
+    static void midiCallback(double deltatime, std::vector<unsigned char>* message, void* userData);
+    void processMidiMessage(const std::vector<unsigned char>& message);
+    void handleNoteWithDuration(unsigned char note, double durationSec);
     std::string getNoteSymbol(unsigned char note);
+    void logEvent(const std::string& message);
 };
